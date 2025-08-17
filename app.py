@@ -116,7 +116,7 @@ def top_k_chunks(query: str, chunks: List[str], k: int = 4) -> List[str]:
 # -----------------------------
 # UI
 # -----------------------------
-st.set_page_config(page_title="Chat with YouTube Video", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Chat with YouTube Video", page_icon="#", layout="wide")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
@@ -247,9 +247,7 @@ else:
     st.markdown("""
     ### Chat directly with KumR! 🎯
     
-    **KumR** is here to explain his own video content in person! He teaches like Andrew Ng - super encouraging and breaks everything down perfectly.
-    
-   
+    **KumR** is here to explain his own video content in person! .
     *It's like having a personal tutoring session with KumR about his videos!*
     """)
 
@@ -258,3 +256,4 @@ if st.session_state.messages:
     if st.sidebar.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
+
