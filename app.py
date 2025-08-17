@@ -245,15 +245,12 @@ YOUR VIDEO TRANSCRIPT:
 else:
     st.info("👈 Load one of KumR's YouTube videos to start chatting!")
     st.markdown("""
-    ### Chat directly with KumR! 🎯
+    ### Chat directly with KumR
     
-    **KumR** is here to explain his own video content in person! .
-    *It's like having a personal tutoring session with KumR about his videos!*
-    """)
-
 # Clear chat button in sidebar
 if st.session_state.messages:
     if st.sidebar.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
+
 
