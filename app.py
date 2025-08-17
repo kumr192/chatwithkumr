@@ -6,7 +6,7 @@ from typing import List, Tuple
 import streamlit as st
 from openai import OpenAI
 
-# Try different import approaches for youtube_transcript_api
+# youtube_transcript_api (same as your code)
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api._errors import (
@@ -19,40 +19,98 @@ except ImportError:
     st.stop()
 
 # -----------------------------
-# Utilities
+# PURE BLACK THEME + MATRIX TEXT
+# -----------------------------
+st.set_page_config(page_title="Chat with KumR", page_icon="⚡", layout="wide")
+
+st.markdown(
+    """
+    <style>
+      /* Global black */
+      html, body, .stApp { background: #000 !important; color: #fff !important; }
+
+      /* Main container to remove panel tint and keep things flat black */
+      .main .block-container { background: transparent !important; }
+
+      /* Sidebar */
+      section[data-testid="stSidebar"] {
+        background: #000 !important;
+        border-right: 1px solid #111 !important;
+      }
+      .stSidebar .stMarkdown, .stSidebar label, .stSidebar p, .stSidebar span { color: #fff !important; }
+
+      /* Inputs */
+      .stTextInput input, .stChatInput textarea, .stSelectbox div[data-baseweb="select"] div {
+        background: #000 !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+        border-radius: 8px !important;
+      }
+
+      /* Buttons */
+      .stButton button {
+        background: #0a0a0a !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+        border-radius: 8px !important;
+      }
+      .stButton button:hover { border-color: #00ff41 !important; }
+
+      /* Messages */
+      [data-testid="stChatMessage"] { background: transparent !important; border: none !important; }
+      /* optional subtle box around messages */
+      .bubble { border: 1px solid #111; background:#000; border-radius: 12px; padding: 10px 12px; }
+
+      /* Success/Info boxes (dark) */
+      .stSuccess, .stInfo, .stError, .stWarning {
+        background: #000 !important;
+        border: 1px solid #111 !important;
+        color: #fff !important;
+      }
+
+      /* Matrix-style streaming text for assistant */
+      .matrix-text {
+        color: #00ff41 !important;
+        font-family: "Courier New", monospace;
+        text-shadow: 0 0 6px #00ff41;
+        animation: matrix-glow 2s ease-in-out infinite alternate;
+      }
+      @keyframes matrix-glow {
+        from { text-shadow: 0 0 6px #00ff41, 0 0 10px #00ff41; }
+        to   { text-shadow: 0 0 10px #00ff41, 0 0 16px #00ff41, 0 0 22px #00ff41; }
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -----------------------------
+# Utilities (unchanged)
 # -----------------------------
 def video_id_from_url(url: str) -> str:
-    """Extract the YouTube video ID from full url or youtu.be link."""
     u = urlparse(url.strip())
     if u.netloc in {"youtu.be"}:
         return u.path.lstrip("/")
     if "youtube" in u.netloc:
         qs = parse_qs(u.query).get("v", [""])[0]
         return qs
-    # allow raw IDs
     if re.fullmatch(r"[A-Za-z0-9_-]{6,}", url.strip()):
         return url.strip()
     return ""
 
 def fetch_transcript_text(youtube_url: str) -> Tuple[str | None, str | None]:
-    """Return (transcript_text, error_msg)."""
     vid = video_id_from_url(youtube_url)
     if not vid:
         return None, "Could not parse a video ID from the URL."
 
     try:
-        # Initialize the API
+        # your instance-based approach kept
         ytt_api = YouTubeTranscriptApi()
-        
-        # Try to fetch transcript with preferred languages
         try:
-            # Try English first
             fetched_transcript = ytt_api.fetch(vid, languages=['en', 'en-US', 'en-GB'])
         except NoTranscriptFound:
             try:
-                # If no English, try to fetch any available transcript
                 transcript_list = ytt_api.list(vid)
-                # Get the first available transcript
                 if transcript_list:
                     transcript = list(transcript_list)[0]
                     fetched_transcript = transcript.fetch()
@@ -61,17 +119,13 @@ def fetch_transcript_text(youtube_url: str) -> Tuple[str | None, str | None]:
             except Exception:
                 return None, "No transcripts available for this video."
 
-        # Extract text from the fetched transcript
         text_parts = []
         for snippet in fetched_transcript:
             text_parts.append(snippet.text)
-        
         text = " ".join(text_parts)
         text = re.sub(r"\s+", " ", text).strip()
-        
         if not text:
             return None, "Transcript was empty."
-        
         return text, None
 
     except TranscriptsDisabled:
@@ -82,13 +136,11 @@ def fetch_transcript_text(youtube_url: str) -> Tuple[str | None, str | None]:
         return None, f"Transcript fetch failed: {str(e)}"
 
 def chunk_text(text: str, max_chars: int = 1200, overlap: int = 100) -> List[str]:
-    """Simple character-based chunking with overlap."""
     text = text.strip()
     chunks = []
     start = 0
     while start < len(text):
         end = min(len(text), start + max_chars)
-        # try to end on a sentence boundary
         period = text.rfind(". ", start, end)
         if period != -1 and period > start + 200:
             end = period + 1
@@ -102,7 +154,6 @@ _STOPWORDS = {
 }
 
 def score_chunk(query: str, chunk: str) -> int:
-    """Very small, dependency-free keyword overlap score."""
     token = lambda s: {w for w in re.findall(r"[A-Za-z0-9]+", s.lower())
                        if w not in _STOPWORDS and len(w) > 2}
     q = token(query)
@@ -114,11 +165,8 @@ def top_k_chunks(query: str, chunks: List[str], k: int = 4) -> List[str]:
     return scored[: max(1, k)]
 
 # -----------------------------
-# UI
+# State (unchanged)
 # -----------------------------
-st.set_page_config(page_title="Chat with YouTube Video", page_icon="#", layout="wide")
-
-# Initialize session state for chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "transcript" not in st.session_state:
@@ -128,13 +176,14 @@ if "chunks" not in st.session_state:
 if "video_title" not in st.session_state:
     st.session_state.video_title = None
 
-# Sidebar for setup
+# -----------------------------
+# Sidebar (logos/banner removed)
+# -----------------------------
 st.sidebar.header("Setup")
 yt_url = st.sidebar.text_input("YouTube URL or Video ID", placeholder="https://www.youtube.com/watch?v=...")
 api_key = st.sidebar.text_input("OpenAI API Key", value=os.getenv("OPENAI_API_KEY", ""), type="password")
 
-# Load video button
-if st.sidebar.button("📺 Load Video", use_container_width=True):
+if st.sidebar.button("Load Video", use_container_width=True):
     if not api_key:
         st.sidebar.error("Please provide your OpenAI API key.")
     elif not yt_url.strip():
@@ -152,105 +201,86 @@ if st.sidebar.button("📺 Load Video", use_container_width=True):
             st.session_state.transcript = text
             st.session_state.chunks = chunks
             st.session_state.video_title = f"YouTube Video ({video_id_from_url(yt_url)})"
-            st.session_state.messages = []  # Clear chat history for new video
-            st.sidebar.success("✅ Video loaded successfully!")
+            st.session_state.messages = []
+            st.sidebar.success("Video loaded successfully!")
 
-# Main interface
-st.title("🎬 Chat with KumR")
+# -----------------------------
+# Main (logos removed, black UI)
+# -----------------------------
+st.title("Chat with KumR")
 
 if st.session_state.transcript:
-    st.success(f"📺 Ready to chat with KumR about his video!")
-    
-    # Display chat history
+    st.success("Ready to chat about the video!")
+
+    # history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    # Chat input
-    if prompt := st.chat_input("Ask KumR about his video..."):
+            if message["role"] == "assistant":
+                st.markdown(f'<div class="matrix-text bubble">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="bubble">{message["content"]}</div>', unsafe_allow_html=True)
+
+    # chat input
+    if prompt := st.chat_input("Ask about the video..."):
         if not api_key:
             st.error("Please provide your OpenAI API key in the sidebar.")
         else:
-            # Add user message to chat history
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
-                st.markdown(prompt)
-            
-            # Get relevant chunks
-            relevant_chunks = top_k_chunks(prompt, st.session_state.chunks, k=4)
-            context = "\n\n".join(f"[Section {i+1}]\n{chunk}" for i, chunk in enumerate(relevant_chunks))
-            
-            # Build conversation context for continuity
+                st.markdown(f'<div class="bubble">{prompt}</div>', unsafe_allow_html=True)
+
+            relevant = top_k_chunks(prompt, st.session_state.chunks, k=4)
+            context = "\n\n".join(f"[Section {i+1}]\n{chunk}" for i, chunk in enumerate(relevant))
+
+            # optional short conversation memory
             conversation_context = ""
             if len(st.session_state.messages) > 1:
-                recent_messages = st.session_state.messages[-6:]  # Last 3 exchanges
+                recent = st.session_state.messages[-6:]
                 conversation_context = "\n\nPrevious conversation:\n"
-                for msg in recent_messages[:-1]:  # Exclude the current question
+                for msg in recent[:-1]:
                     conversation_context += f"{msg['role'].title()}: {msg['content']}\n"
-            
-            # Generate response
+
             try:
                 client = OpenAI(api_key=api_key)
                 with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
-                        response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            temperature=0.3,
-                            messages=[
-                                {"role": "system", "content": f"""You are KumR, the presenter in this YouTube video. You're answering questions about your own video content in the warm, encouraging style of Andrew Ng. You explain things like you're talking to a smart 15-year-old.
+                    message_placeholder = st.empty()
+                    full_response = ""
 
-YOUR IDENTITY:
-- You ARE KumR, the person who made this video
-- You're explaining YOUR OWN content and ideas
-- Reference what YOU said in the video ("As I mentioned..." "When I explained..." "In my video...")
-- Take ownership of the concepts you presented
-- Share additional insights beyond what's in the transcript
-
-YOUR TEACHING STYLE (like Andrew Ng):
-- Warm and encouraging - always positive and supportive  
-- Explain complex concepts like you're talking to a smart 15-year-old
-- Use simple analogies and real-world examples
-- Break down complicated ideas into bite-sized pieces
-- Say things like "Great question!" "Let me break this down for you" "Think of it like..."
-- Be genuinely excited about teaching YOUR concepts
-
-HOW TO RESPOND:
-- Start with encouragement for good questions
-- Reference your video content as YOUR work ("In my video, I showed..." "The example I used...")
-- Expand on concepts with additional explanations not in the transcript
-- Use everyday language and relatable examples for teenagers
-- If something wasn't covered in your video, acknowledge it: "That's a great follow-up question! I didn't cover that in this particular video, but..."
-
-CONVERSATION STYLE:
-- Speak as the creator/presenter, not a third party
-- Connect ideas to things a 15-year-old would know
-- Build on your previous explanations in the conversation
-- End responses with encouragement or thought-provoking questions
+                    for response in client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        temperature=0.3,
+                        stream=True,
+                        messages=[
+                            {"role": "system", "content": f"""You are KumR, the presenter in this YouTube video. You answer questions about your video content clearly and helpfully for a smart 15-year-old.
 
 YOUR VIDEO TRANSCRIPT:
 {context}{conversation_context}
 """},
-                                {"role": "user", "content": prompt}
-                            ],
-                        )
-                        answer = response.choices[0].message.content.strip()
-                        st.markdown(answer)
-                
-                # Add assistant response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-                
+                            {"role": "user", "content": prompt}
+                        ],
+                    ):
+                        if response.choices[0].delta.content is not None:
+                            full_response += response.choices[0].delta.content
+                            message_placeholder.markdown(
+                                f'<div class="matrix-text bubble">{full_response}▊</div>',
+                                unsafe_allow_html=True
+                            )
+
+                    message_placeholder.markdown(
+                        f'<div class="matrix-text bubble">{full_response}</div>',
+                        unsafe_allow_html=True
+                    )
+
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
 else:
-    st.info("👈 Load one of KumR's YouTube videos to start chatting!")
-    st.markdown("""
-    ### Chat directly with KumR
-    
-# Clear chat button in sidebar
+    st.info("Paste a YouTube URL in the sidebar and click **Load Video** to start.")
+
+# Clear chat
 if st.session_state.messages:
-    if st.sidebar.button("🗑️ Clear Chat", use_container_width=True):
+    if st.sidebar.button("Clear Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
-
-
